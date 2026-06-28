@@ -1,6 +1,6 @@
 # godot-cpp checkout (cloned by `make setup`)
 /godot-cpp/
-
+tmp/
 # build artifacts
 *.os
 *.o
