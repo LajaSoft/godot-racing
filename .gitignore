@@ -1,0 +1,18 @@
+# godot-cpp checkout (cloned by `make setup`)
+/godot-cpp/
+
+# build artifacts
+*.os
+*.o
+*.so
+*.a
+.sconsign.dblite
+__pycache__/
+/dist/
+
+# compiled extension binaries land here
+/demo/addons/ffb/bin/*.so
+
+# Godot
+/demo/.godot/
+*.import

@@ -1,0 +1,90 @@
+# Build everything in Docker; the host only runs the result.
+#
+#   docker compose run --rm build        # compile the GDExtension -> demo/addons/ffb/bin/
+#   docker compose run --rm tools        # compile the standalone C probe/test tools -> dist/
+#   docker compose run --rm shell        # interactive shell in the build env
+#
+# GODOT_CPP_BRANCH selects the godot-cpp version (must match your Godot major.minor).
+# Default 4.4 matches Godot 4.4.x. Override: GODOT_CPP_BRANCH=4.5 docker compose run --rm build
+
+x-common: &common
+  build: .
+  image: godot-ffb-build
+  user: "1000:1000"
+  working_dir: /work
+  environment:
+    HOME: /tmp
+    GODOT_CPP_BRANCH: "${GODOT_CPP_BRANCH:-4.4}"
+  volumes:
+    - .:/work
+
+services:
+  build:
+    <<: *common
+    command: make build
+
+  tools:
+    <<: *common
+    command: make tools
+
+  shell:
+    <<: *common
+    command: bash
+    stdin_open: true
+    tty: true
+
+  # Run with the wheel passed through (input devices = char major 13).
+  # No GPU/display needed: good for the C tools or `godot --headless`.
+  #   docker compose run --rm wheel                 # ffbprobe (read-only, safe)
+  #   docker compose run --rm wheel ./dist/ffbtest  # WARNING: moves the wheel
+  wheel:
+    <<: *common
+    user: root                 # /dev/input/event* are root:input 0660
+    device_cgroup_rules:
+      - 'c 13:* rmw'           # allow all input devices
+    volumes:
+      - .:/work
+      - /dev/input:/dev/input
+    command: ./dist/ffbprobe
+
+  # Full GUI demo in the container: GPU (nvidia-container-toolkit) + wheel +
+  # host display. Runs as uid 1000 (matches the desktop user, so the Wayland /
+  # X sockets line up); group 995 = host 'input' group for the wheel node.
+  #
+  #   docker compose run --rm gui         # XWayland; no xhost needed
+  #
+  # X auth is handled by passing the host's XAUTHORITY cookie (it lives under
+  # /run/user/1000, which is mounted). DISPLAY is taken from your host shell.
+  # If $XAUTHORITY is unset on the host:
+  #   export XAUTHORITY=$(ls /run/user/$UID/.mutter-Xwaylandauth.* | head -1)
+  #
+  # Native Wayland alternative (Godot 4.4's Wayland backend can SIGFPE):
+  #   docker compose run --rm gui godot --path demo --display-driver wayland --audio-driver Dummy
+  gui:
+    <<: *common
+    group_add:
+      - "995"                  # host 'input' group (wheel node is root:995 0660)
+    device_cgroup_rules:
+      - 'c 13:* rmw'
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      HOME: /tmp
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: all
+      XDG_RUNTIME_DIR: /run/user/1000
+      WAYLAND_DISPLAY: "${WAYLAND_DISPLAY:-wayland-0}"
+      DISPLAY: "${DISPLAY:-:0}"
+      XAUTHORITY: "${XAUTHORITY:-}"   # host X cookie (under /run/user/1000, mounted) -> no xhost
+    volumes:
+      - .:/work
+      - /dev/input:/dev/input
+      - /run/user/1000:/run/user/1000   # Wayland socket lives here (host uid 1000)
+      - /tmp/.X11-unix:/tmp/.X11-unix    # XWayland
+    # dbus-run-session gives Godot a session bus (portals/screensaver) -> no dbus errors
+    command: dbus-run-session godot --path demo --display-driver x11 --audio-driver Dummy

@@ -1,0 +1,16 @@
+; Godot 4.4 demo project for the FFB library.
+; Run on the host (where the Moza is connected):  godot --path demo
+; or open this folder in the Godot editor.
+
+config_version=5
+
+[application]
+
+config/name="Godot FFB — Moza R3 demo"
+run/main_scene="res://vehicle.tscn"
+config/features=PackedStringArray("4.4")
+
+[display]
+
+window/size/viewport_width=900
+window/size/viewport_height=560
