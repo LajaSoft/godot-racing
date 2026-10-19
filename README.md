@@ -1,170 +1,94 @@
-# godot-ffb — Force Feedback steering wheels in Godot (Linux)
+# Godot FFB — Moza / Linux
 
-A Godot 4 GDExtension that gives GDScript real force feedback on Linux, talking
-directly to the kernel Force Feedback API (`evdev` / `ioctl EVIOCSFF`). Godot's
-built-in `Input` only exposes simple rumble; this adds constant force (the core
-of sim-racing FFB), spring / damper / friction, periodic effects, ramp, rumble,
-plus global gain and autocenter — and direct reading of wheel/pedal axes and
-buttons straight from evdev.
+A Linux force-feedback runtime addon for Godot. The repository is still named `godot-racing`; the reusable plugin is `addons/ffb`. Vehicle and Rocket Pong demos remain under `demo/`.
 
-Developed and tested against a **Moza R3** (Gudsen USB `346e:0005`), but works
-with any wheel the kernel exposes as an FF-capable input device.
+**Initial support:** Linux x86-64, standard single-precision Godot 4.4.1+, directly USB-connected Gudsen/Moza R3 wheel and pedals. The backend uses Linux evdev Force Feedback (`/dev/input/event*`, `EVIOCSFF`), not the Moza SDK. The host needs an FF-capable kernel driver and read/write device permissions. Other wheels may work through `open_device(path)` if their kernel driver exposes supported effects, but are not verified. There is no Windows, macOS or Web backend in 0.1.0; DirectInput is not used.
 
-## How it works
+## Install the release addon
 
-- The kernel driver (`hid-universal-pidff` / `hid-pidff`) binds the wheel and
-  creates `/dev/input/eventN` with FF capability — this lives on the **host**.
-- This extension opens that node read/write, reads axes/buttons, and uploads /
-  updates FF effects.
-- You compute torque in your game and call `update_constant_force()` every
-  physics frame — exactly how a sim drives an FFB wheel.
+Download/extract `godot-ffb-0.1.0-linux-x86_64.zip` into a Godot project, or declare the prebuilt Git distribution tag with gd-plug:
 
-## Layout
+```gdscript
+extends "res://addons/gd-plug/plug.gd"
 
-```
-src/        C++ GDExtension (FFBManager, FFBDevice)
-tools/      standalone C utilities (no Godot): ffbprobe, ffbtest
-demo/       self-contained Godot project (the .so is built into it)
+func _plugging():
+    plug("OWNER/godot-racing", {"tag": "addon-v0.1.0"})
 ```
 
-## Build (in Docker, host stays clean)
+Replace OWNER with the eventual GitHub owner. The repository currently has no remote and the release tags are not published yet. Install through your Godot/gd-plug environment, with the editor closed. No compiler or Docker is required by consumers of the prebuilt addon. The extension imports automatically; it is not an EditorPlugin requiring activation.
 
-Requires only Docker on the build machine. The Godot version is selected by
-`GODOT_CPP_BRANCH` (default `4.4`, matching Godot 4.4.x — set it to your version).
+`v0.1.0` is a source tag. `addon-v0.1.0` is an automatically generated snapshot containing the compiled addon. gd-plug copies the repository's `addons/` tree and does not fetch Release ZIP attachments, so these two tags serve different purposes. Both `template_debug` and `template_release` libraries are included in the binary distribution.
+
+See [the standalone addon README](addons/ffb/README.md) for the API and [release instructions](docs/RELEASING.md) for publishing.
+
+## API
+
+```gdscript
+extends Node
+
+var wheel: FFBWheel
+
+func _ready() -> void:
+    wheel = FFBWheel.new()
+    wheel.auto_open = false
+    wheel.gain = 0.35
+    wheel.open_failed.connect(func(reason): push_error(reason))
+    add_child(wheel)
+    wheel.open()
+
+func _physics_process(delta: float) -> void:
+    wheel.poll(delta)
+    if not wheel.is_open():
+        return
+    var torque := -0.3 * wheel.state.steering - 0.03 * wheel.state.steer_velocity
+    wheel.apply_torque(torque)
+```
+
+`FFBWheel` provides normalized steering/pedals/buttons, torque output, physical angle conversion and lifecycle cleanup. Its optional `FFBForceModel` Resource converts `FFBState` into normalized torque. Game-specific vehicle and gyroscope models stay outside the plugin.
+
+`FFBManager` enumerates devices and opens Moza automatically or another device by path. `FFBDevice` exposes constant, spring, damper, friction, periodic, ramp and rumble effects plus playback, gain/autocenter and axis metadata. Query `get_capabilities()` because effect support depends on the device/kernel. Initial R3 ABS codes are steering 0, throttle 2 and brake 5; force inversion defaults to true. The addon does not configure wheel firmware, physical lock or pedal calibration.
+
+## Build and test in Docker
 
 ```bash
-# 1. build the GDExtension -> demo/addons/ffb/bin/libffb.linux.template_debug.x86_64.so
+# Reproducible portable release candidate, including installation tests
+docker compose run --rm release
+
+# Individual developer tasks
 docker compose run --rm build
-
-# 2. (optional) build the standalone C test tools -> dist/
+docker compose run --rm build-release
 docker compose run --rm tools
+docker compose run --rm test
+docker compose run --rm package
 
-# release build of the extension:
-docker compose run --rm build make build-release
+# Verify the same compiled libraries on the newer Godot runtime
+docker compose run --rm test bash scripts/test_compatibility.sh 4.7.2-stable
 ```
 
-First run clones `godot-cpp` and compiles it, so it takes a few minutes; later
-builds are incremental.
+Release builds use Ubuntu 22.04 (glibc 2.35 / GLIBCXX_3.4.30 baseline), pinned godot-cpp commit from `godot-cpp.ref`, and a minimal binding profile. The baseline runtime is Godot 4.4.1; CI also verifies Godot 4.7.2. Prebuilt libraries are single precision and Linux x86-64 only. Packaging rejects binaries requiring a newer libc/libstdc++ baseline; after a developer build on Ubuntu 24.04, use the `release` service to regenerate portable binaries.
 
-> Check your Godot version with `godot --version`. If it is not 4.4.x, rebuild
-> with e.g. `GODOT_CPP_BRANCH=4.5 docker compose run --rm build` and update
-> `compatibility_minimum` in `demo/addons/ffb/ffb.gdextension`.
+The source branch ignores compiled libraries. Output is under `dist/`: the standalone addon ZIP, SHA256SUMS and machine-readable provenance. `BUILD.json` inside the addon records the source commit, dirty status, godot-cpp commit, ABI requirements and each payload file's SHA256. Local uncommitted candidates are allowed for inspection but cannot pass the publish script's provenance checks.
 
-## Run (on the host, where the Moza is connected)
+Tests install the ZIP into an empty project, load both native template libraries, verify classes/methods and model behavior, then use the real vendored gd-plug 0.2.6 to install/reinstall/uninstall the package from a temporary local Git tag. No input device is opened and no force is sent. Runtime script errors fail the test even when Godot returns exit code zero. The GitHub workflow builds, tests and uploads candidates; pushing a matching `v*` source tag additionally creates the immutable `addon-v*` tag and a draft GitHub Release. See [RELEASING.md](docs/RELEASING.md).
 
-1. Sanity-check the hardware without Godot:
-
-   ```bash
-   ./dist/ffbprobe          # lists devices; the Moza shows [FORCE FEEDBACK]
-   ./dist/ffbtest           # WARNING: the wheel will move. Push left/right, spring, vibration.
-   ```
-
-2. Run the demo:
-
-   ```bash
-   godot --path demo
-   ```
-
-   > First time only: a GDExtension is loaded from `.godot/extension_list.cfg`,
-   > which Godot generates when it **imports** the project. If you run the game
-   > before that file exists you get `Could not find type "FFBManager"`. Fix by
-   > opening the project in the editor once, or generating it headless:
-   >
-   > ```bash
-   > godot --headless --editor --path demo --quit   # writes .godot/extension_list.cfg
-   > godot --path demo
-   > ```
-   >
-   > (this repo ships that file pre-made, so a direct run works too).
-
-### Run everything inside the container (GPU + wheel passthrough)
-
-The `gui` service runs the demo in-container with the GPU (nvidia-container-toolkit)
-and the wheel passed through, drawing to the host display. Runs as uid 1000 so the
-Wayland / X sockets line up; group 995 = host `input` group for the wheel node.
+## Existing demos and desktop container
 
 ```bash
-docker compose run --rm gui          # XWayland; no xhost needed
-```
-
-X auth works by passing the host `XAUTHORITY` cookie (it lives under `/run/user/1000`,
-which is mounted); `DISPLAY` comes from your shell. If `echo $XAUTHORITY` is empty:
-
-```bash
-export XAUTHORITY=$(ls /run/user/$UID/.mutter-Xwaylandauth.* | head -1)
+docker compose run --rm build
+# Host device discovery, without playing any effects:
+docker compose run --rm wheel
+# NVIDIA + input devices + host XWayland:
 docker compose run --rm gui
 ```
 
-Native Wayland alternative (Godot 4.4's Wayland backend can SIGFPE on some compositors):
+`demo/addons/ffb` links to the canonical root addon, so existing `res://addons/ffb` references and the historical binary path still resolve. The user's selected scene and local demo edits are retained. Force-producing demos and `dist/ffbtest` run only when launched explicitly.
 
-```bash
-docker compose run --rm gui godot --path demo --display-driver wayland --audio-driver Dummy
-```
+The GUI service retains the existing desktop setup: NVIDIA Container Toolkit, `/dev/input`, `/run/user/1000`, X11 sockets, host DISPLAY/XAUTHORITY and input group 995. Set XAUTHORITY to your desktop cookie under the mounted runtime directory. Build containers default to UID/GID 1000; override LOCAL_UID/LOCAL_GID and INPUT_GID when needed. Native Wayland can be selected by overriding the GUI command. The default demo uses dummy audio.
 
-Verified working in-container: GPU (`nvidia-smi`, both RTX 5060 Ti), Vulkan
-(`vulkaninfo` enumerates the NVIDIA GPUs), X connection via the cookie, and the
-Moza wheel (`ffbprobe`). The only thing that opens a window / moves the wheel is
-the actual `gui` run.
+The default Dockerfile stage remains the Ubuntu 24.04 runtime/toolchain image (`godot-ffb-build`), preserving FoldRoom's current build-context and binary-copy integration. The separate `portable` stage is used for releases. Neither project nor repository has been renamed.
 
-Verify the pieces without opening a window / moving the wheel:
+## License
 
-```bash
-docker compose run --rm wheel                 # wheel visible? (read-only probe)
-docker compose run --rm gui nvidia-smi        # GPU visible?
-docker compose run --rm gui godot --version   # Godot present?
-```
+MIT. See [LICENSE](LICENSE), [third-party notices](THIRD_PARTY.md) and the godot-cpp notice shipped with the addon.
 
-Adjust `WAYLAND_DISPLAY` / `DISPLAY` / the `/run/user/1000` mount in `compose.yml`
-if your runtime dir or display names differ (e.g. uid != 1000).
-
-   The wheel self-centers (computed in software via constant force). Turn it and
-   feel the centering + damping; press SPACE for a curb bump; arrows tune it.
-
-## GDScript API
-
-High-level (recommended) — `FFBWheel` node + `FFBForceModel` resource:
-
-```gdscript
-var wheel := FFBWheel.new()
-wheel.force_model = FFBForceModel.new()    # parametric self-aligning model
-add_child(wheel)                            # auto-opens the Moza wheel
-
-func _physics_process(delta):
-    wheel.poll(delta)                       # read steering / pedals
-    wheel.state.speed = my_speed_0_to_1     # feed vehicle state
-    wheel.update_force(delta)               # model -> wheel torque
-    # or compute the force yourself:  wheel.apply_torque(my_torque)
-```
-
-Subclass `FFBForceModel` and override `compute(state, dt)` for a physical
-chassis / steering-rack model — `FFBState` already carries tire-force, load,
-friction and slip fields for that.
-
-### Low-level (device)
-
-```gdscript
-var mgr := FFBManager.new()
-var wheel := mgr.open_moza()            # or mgr.open_device("/dev/input/eventN")
-if wheel == null: return
-
-wheel.set_gain(1.0)
-wheel.start_constant_force()
-
-func _physics_process(delta):
-    wheel.poll()                        # refresh axis/button state
-    var steer := wheel.get_axis_centered(0)   # ABS_X, -1..1
-    var torque := -0.8 * steer          # your physics here
-    wheel.update_constant_force(torque) # -1..1
-```
-
-Other effects: `upload_spring/ damper/ friction/ periodic/ ramp/ rumble(...)`
-return an effect id; play with `play_effect(id, count)`, stop with
-`stop_effect(id)`, remove with `erase_effect(id)`. `set_autocenter(0..1)` uses
-the wheel's built-in centering spring. See `demo/main.gd` for a full example and
-`src/ffb_device.h` for the complete surface.
-
-## Force direction note
-
-Constant force uses a signed level with a fixed direction. If torque feels
-inverted on your wheel, negate the value you pass to `update_constant_force()`
-(a per-device "invert" toggle is the intended config knob).
+The upstream gd-plug 0.2.6 installer does not parse on Godot 4.7.2 (`_process` lacks the now-required return value). Use Godot 4.4.1 for projects retaining gd-plug 0.2.6, or install the ZIP directly on 4.7.2. Compatibility tests explicitly use 4.4.1 for the gd-plug consumer and 4.7.2 for clean ZIP consumers; the vendored installer is unmodified.

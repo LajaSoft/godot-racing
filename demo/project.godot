@@ -6,8 +6,8 @@ config_version=5
 
 [application]
 
-config/name="Godot FFB — Moza R3 demo"
-run/main_scene="res://vehicle.tscn"
+config/name="Godot FFB Rocket Pong"
+run/main_scene="res://rocket_pong.tscn"
 config/features=PackedStringArray("4.4")
 
 [display]

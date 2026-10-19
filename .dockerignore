@@ -1,0 +1,15 @@
+.git
+.claude
+.agents
+.codex
+.aws
+.godot
+**/.godot
+**/*.so
+**/*.a
+**/*.os
+**/*.o
+godot-cpp
+dist
+tmp
+.sconsign.dblite
