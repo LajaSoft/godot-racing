@@ -49,15 +49,20 @@ func _ready() -> void:
 
 
 func open() -> bool:
+	close()
 	device = manager.open_device(device_path) if device_path != "" else manager.open_moza()
 	if device == null or not device.is_open():
 		open_failed.emit("no FFB wheel found")
 		return false
 	device.set_gain(gain)
 	device.set_inverted(inverted)
-	device.start_constant_force()
+	if not device.start_constant_force():
+		close()
+		open_failed.emit("device cannot start a constant-force effect")
+		return false
 	# Pre-make the curb effect once so play_curb() doesn't burn an effect slot.
-	_curb_id = device.upload_periodic(FFBDevice.WAVE_SINE, 0.6, 0.0, 50, 90.0, 250, 0, 50)
+	if device.get_capabilities().get("sine", false):
+		_curb_id = device.upload_periodic(FFBDevice.WAVE_SINE, 0.6, 0.0, 50, 90.0, 250, 0, 50)
 	opened.emit(device.get_device_name())
 	return true
 
@@ -121,8 +126,15 @@ func set_gain(g: float) -> void:
 
 func close() -> void:
 	if is_open():
-		device.stop_constant_force()
 		device.close()
+	device = null
+	_curb_id = -1
+	last_torque = 0.0
+	throttle = 0.0
+	brake = 0.0
+	clutch = 0.0
+	state.steering = 0.0
+	state.steer_velocity = 0.0
 
 
 func _exit_tree() -> void:

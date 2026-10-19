@@ -11,8 +11,14 @@ __pycache__/
 /dist/
 
 # compiled extension binaries land here
-/demo/addons/ffb/bin/*.so
+/addons/ffb/bin/*.so
 
 # Godot
 /demo/.godot/
 *.import
+
+# Package/build test projects
+/tests/.godot/
+/tests/tmp/
+/.plugged/
+*.pyc

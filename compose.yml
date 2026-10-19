@@ -4,17 +4,18 @@
 #   docker compose run --rm tools        # compile the standalone C probe/test tools -> dist/
 #   docker compose run --rm shell        # interactive shell in the build env
 #
-# GODOT_CPP_BRANCH selects the godot-cpp version (must match your Godot major.minor).
-# Default 4.4 matches Godot 4.4.x. Override: GODOT_CPP_BRANCH=4.5 docker compose run --rm build
+# godot-cpp.ref pins the minimum supported Godot 4.4 API.
+# release uses a portable Linux ABI and builds both debug and release libraries.
 
 x-common: &common
-  build: .
+  build:
+    context: .
+    target: runtime
   image: godot-ffb-build
-  user: "1000:1000"
+  user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
   working_dir: /work
   environment:
     HOME: /tmp
-    GODOT_CPP_BRANCH: "${GODOT_CPP_BRANCH:-4.4}"
   volumes:
     - .:/work
 
@@ -22,6 +23,26 @@ services:
   build:
     <<: *common
     command: make build
+
+  build-release:
+    <<: *common
+    command: make build-release
+
+  test:
+    <<: *common
+    command: make test
+
+  package:
+    <<: *common
+    command: make package
+
+  release:
+    <<: *common
+    build:
+      context: .
+      target: portable
+    image: godot-ffb-portable-build
+    command: make release
 
   tools:
     <<: *common
@@ -63,7 +84,7 @@ services:
   gui:
     <<: *common
     group_add:
-      - "995"                  # host 'input' group (wheel node is root:995 0660)
+      - "${INPUT_GID:-995}"   # host 'input' group (wheel node is root:995 0660)
     device_cgroup_rules:
       - 'c 13:* rmw'
     deploy:
@@ -77,14 +98,14 @@ services:
       HOME: /tmp
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: all
-      XDG_RUNTIME_DIR: /run/user/1000
+      XDG_RUNTIME_DIR: /run/user/${LOCAL_UID:-1000}
       WAYLAND_DISPLAY: "${WAYLAND_DISPLAY:-wayland-0}"
       DISPLAY: "${DISPLAY:-:0}"
       XAUTHORITY: "${XAUTHORITY:-}"   # host X cookie (under /run/user/1000, mounted) -> no xhost
     volumes:
       - .:/work
       - /dev/input:/dev/input
-      - /run/user/1000:/run/user/1000   # Wayland socket lives here (host uid 1000)
+      - /run/user/${LOCAL_UID:-1000}:/run/user/${LOCAL_UID:-1000}   # Wayland socket lives here (host uid 1000)
       - /tmp/.X11-unix:/tmp/.X11-unix    # XWayland
     # dbus-run-session gives Godot a session bus (portals/screensaver) -> no dbus errors
     command: dbus-run-session godot --path demo --display-driver x11 --audio-driver Dummy
