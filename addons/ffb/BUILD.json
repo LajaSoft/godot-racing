@@ -1,0 +1,38 @@
+{
+  "name": "godot-ffb",
+  "version": "0.1.0",
+  "platform": "linux.x86_64",
+  "godot_minimum": "4.4",
+  "precision": "single",
+  "license": "MIT",
+  "source_commit": "3d9339ba851929f5dd9b834bb3f3efb5708bd4f0",
+  "source_dirty": false,
+  "godot_cpp_commit": "b0e3b1e4b78a606f48d162898afb5eeda533d2a9",
+  "distribution_tag": "addon-v0.1.0",
+  "abi": {
+    "libffb.linux.template_debug.x86_64.so": {
+      "GLIBC": "2.34",
+      "GLIBCXX": "0"
+    },
+    "libffb.linux.template_release.x86_64.so": {
+      "GLIBC": "2.34",
+      "GLIBCXX": "0"
+    }
+  },
+  "sha256": {
+    "addons/ffb/LICENSE": "a603f1ea733996ae902a6902418fdde951431d7637faa274077a67a0ad9c7ac2",
+    "addons/ffb/README.md": "364eb182ddb8f4a5cc891f8fc4e2fba78f6d684c2dd1041602e9d5d2cddcd521",
+    "addons/ffb/VERSION": "e9dd8507f4bf0c6f42458e41aea833ad0bd3f6127272335eee9bf4d58541ed67",
+    "addons/ffb/bin/libffb.linux.template_debug.x86_64.so": "bc550b49545d31d0d14fce10c55ad8ae88efe7e986a4279e0fec31858fe550e3",
+    "addons/ffb/bin/libffb.linux.template_release.x86_64.so": "1b96d05d5fe0a391eae02fcbd5847b90eee697cafd7805e7430ac6b0a181ac96",
+    "addons/ffb/ffb.gdextension": "97a90787040a945efcf69986f7795ab33f5cedb451a97769c4ed580777a94c27",
+    "addons/ffb/ffb.gdextension.uid": "14f77548e5e989946726a34b688f1af3971eaeb25520fa30ce03f58ee2f71865",
+    "addons/ffb/ffb_force_model.gd": "e0aa4a588d0d9ef764ce804c58b059cb4598bf481cd8db1898e0d6ddbdb84bfb",
+    "addons/ffb/ffb_force_model.gd.uid": "04241e9d52f72b572e38337c95ccd81c194730b50d714d0d83011aa95e6c74c3",
+    "addons/ffb/ffb_state.gd": "dd32b68059b1c0f6744a8ba485d047ae2c7f1f9c44a71dce6b2845d9322b1177",
+    "addons/ffb/ffb_state.gd.uid": "282c143fad4e6d4c9fbeafe7aeada53e991ceb2e06bb4654395dd7ba6b0751d3",
+    "addons/ffb/ffb_wheel.gd": "4e14dc136dc12188af91a049002671de2e30ecbc8fe43fedac134e6b5bf7acff",
+    "addons/ffb/ffb_wheel.gd.uid": "e79c41e957baf7a242b58448f5107e8af7265e162209acae425e39c91fe2b4b9",
+    "addons/ffb/licenses/godot-cpp.txt": "26a5b210d90760156ce886267ce9df235787dcc6cebfd7ecd95ef5b6fdcc95bf"
+  }
+}
